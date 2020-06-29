@@ -33,6 +33,8 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 
+	nadapi "github.com/amorenoz/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	nadutil "github.com/amorenoz/network-attachment-definition-client/pkg/utils"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -51,7 +53,8 @@ type NetConf struct {
 	KernelPath    string `json:"kernelpath"` // Kernelpath of the device
 	PCIAddr       string `json:"pciBusID"`   // PCI Address of target network device
 	RuntimeConfig struct {
-		DeviceID string `json:"deviceID,omitempty"`
+		DeviceID      string `json:"deviceID,omitempty"`
+		CNIDeviceFile string `json:"CNIDeviceFile,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
 }
 
@@ -99,6 +102,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 	contDev, err := moveLinkIn(hostDev, containerNs, args.IfName)
 	if err != nil {
 		return fmt.Errorf("failed to move link %v", err)
+	}
+
+	if cfg.PCIAddr != "" {
+		err = storeDeviceInfo(cfg)
+		if err != nil {
+			return err
+		}
 	}
 
 	var result *current.Result
@@ -159,6 +169,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
+
 	if args.Netns == "" {
 		return nil
 	}
@@ -176,6 +187,10 @@ func cmdDel(args *skel.CmdArgs) error {
 		if err := ipam.ExecDel(cfg.IPAM.Type, args.StdinData); err != nil {
 			return err
 		}
+	}
+
+	if err := cleanDeviceInfo(cfg); err != nil {
+		return err
 	}
 
 	return nil
@@ -328,6 +343,26 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 	}
 
 	return nil, fmt.Errorf("failed to find physical interface")
+}
+
+func cleanDeviceInfo(n *NetConf) error {
+	if n.RuntimeConfig.CNIDeviceFile != "" {
+		return nadutil.CleanDeviceInfo(n.RuntimeConfig.CNIDeviceFile)
+	}
+	return nil
+}
+
+func storeDeviceInfo(n *NetConf) error {
+	if n.RuntimeConfig.CNIDeviceFile != "" {
+		devInfo := nadapi.DeviceInfo{
+			Type: "pci",
+			Pci: &nadapi.PciDevice{
+				Address: n.PCIAddr,
+			},
+		}
+		return nadutil.SaveDeviceInfo(&devInfo, n.RuntimeConfig.CNIDeviceFile)
+	}
+	return nil
 }
 
 func main() {

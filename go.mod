@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/Microsoft/go-winio v0.4.11 // indirect
+        github.com/amorenoz/network-attachment-definition-client poc/devinfo
 	github.com/Microsoft/hcsshim v0.8.6
 	github.com/alexflint/go-filemutex v0.0.0-20171022225611-72bdc8eae2ae
 	github.com/buger/jsonparser v0.0.0-20180808090653-f4dd9f5a6b44
